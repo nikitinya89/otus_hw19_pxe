@@ -1,0 +1,59 @@
+- name: configure pxe server
+  hosts: all
+  become: true
+  gather_facts: no
+  tasks:
+    - name: disable firewall
+      systemd:
+        name: ufw
+        state: stopped
+        enabled: false
+
+    - name: install dnsmasq and apache
+      apt:
+        name:
+         - dnsmasq
+         - apache2
+        state: present
+        update_cache: true
+
+
+    - name: download network install files
+      shell: mkdir -p /srv/tftp && \
+             wget https://mirror.yandex.ru/ubuntu-releases/24.04/ubuntu-24.04-netboot-amd64.tar.gz && \
+             tar -xzvf ubuntu-24.04-netboot-amd64.tar.gz -C /srv/tftp; \
+             mkdir /srv/images && cd /srv/images && \
+             mkdir /srv/ks; \
+             touch /srv/ks/meta-data
+
+    - name: download iso
+      get_url:
+        url: https://mirror.yandex.ru/ubuntu-releases/24.04/ubuntu-24.04-live-server-amd64.iso
+        dest: /srv/images/ubuntu-24.04-live-server-amd64.iso
+        mode: '0644'
+
+
+    - name: copy config files
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest  }}"
+      with_items:
+        - { src: "ks-server.conf", dest: "/etc/apache2/sites-available/ks-server.conf" }
+        - { src: "pxe.conf", dest: "/etc/dnsmasq.d/pxe.conf"  }
+        - { src: "user-data", dest: "/srv/ks/user-data" }
+        - { src: "pxelinux", dest: "/srv/tftp/amd64/pxelinux.cfg/default"}
+
+    - name: enable apache site
+      shell: a2ensite ks-server.conf
+
+    - name: restart apache
+      systemd:
+        name: apache2
+        state: restarted
+        enabled: true
+
+    - name: restart dnsmasq
+      systemd:
+        name: dnsmasq
+        state: restarted
+        enabled: true

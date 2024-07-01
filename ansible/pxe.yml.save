@@ -1,0 +1,38 @@
+- name: configure pxe server
+  hosts: pxe
+  become: true
+  gather_facts: no
+  tasks:
+    - name: disable firewall
+      systemd:
+        name: ufw
+        state: stopped
+        enabled: false
+
+    - name: install dnsmasq and apache
+      apt:
+        name:
+         - dnsmasq
+         - apache2
+        state: present
+        update_cache: true
+
+
+    - name: download network install files
+      shell: mkdir -p /srv/tftp && \
+             wget http://cdimage.ubuntu.com/ubuntu-server/daily-live/current/oracular-netboot-amd64.tar.gz && \
+             tar -xzvf oracular-netboot-amd64.tar.gz -C /srv/tftp; \
+             mkdir /srv/images && cd /srv/images && \
+             wget http://cdimage.ubuntu.com/ubuntu-server/daily-live/current/oracular-live-server-amd64.iso; \
+             mkdir /srv/ks; \
+             touch /srv/ks/meta-data
+
+    - name: copy config files
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest  }}"
+      with_items:
+        - { src: "ks-server.conf", dest: "/etc/apache2/sites_available/ks-server.conf" }
+        - { src: "pxe.conf", dest: "/etc/dnsmasq.d/pxe.conf"  }
+        - { src: "user-data", dest: "/srv/ks/user-data" }
+        - { src: "pxelinux", dest: "/srv/tftp/amd64/pxelinux.cfg/default"}
